@@ -1,0 +1,39 @@
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.utils import to_categorical
+
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+x_train = preprocess_input(x_train)
+x_test = preprocess_input(x_test)
+y_train = to_categorical(y_train, 10)
+y_test = to_categorical(y_test, 10)
+
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(32, 32, 3))
+for layer in base_model.layers:
+    layer.trainable = False
+
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dense(1024, activation='relu')(x)
+predictions = Dense(10, activation='softmax')(x)
+model = Model(inputs=base_model.input, outputs=predictions)
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+datagen = ImageDataGenerator(width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+datagen.fit(x_train)
+
+batch_size = 32
+epochs = 10
+history = model.fit(datagen.flow(x_train, y_train, batch_size=batch_size),
+                    validation_data=(x_test, y_test),
+                    steps_per_epoch=len(x_train) // batch_size,
+                    epochs=epochs)
+
+loss, accuracy = model.evaluate(x_test, y_test)
+print(f"Test Accuracy: {accuracy * 100:.2f}%")
